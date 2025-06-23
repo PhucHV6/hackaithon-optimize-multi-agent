@@ -420,7 +420,8 @@ def display_chat_section():
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            display_content_with_formatting(message["content"])
+            # st.markdown(message["content"])
 
     # Generate initial response (if it's the first message)
     if not st.session_state.messages:

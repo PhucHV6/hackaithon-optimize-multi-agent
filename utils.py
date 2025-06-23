@@ -94,7 +94,9 @@ def display_content_with_formatting(content_str: str):
     try:
         content_json = json.loads(content_str)
         if isinstance(content_json, (dict, list)):
-            st.json(content_json)
+            # Use container to control JSON display width
+            with st.container():
+                st.json(content_json)
         else:
             st.markdown(str(content_json))
     except (json.JSONDecodeError, TypeError):
@@ -107,11 +109,31 @@ def display_content_with_formatting(content_str: str):
             content_str = re.sub(r'\\n-', r'\n-', content_str)
             # Ensure proper spacing for headers
             content_str = re.sub(r'\\n(#+)', r'\n\1 ', content_str)
-            # Looks like markdown
-            st.markdown(content_str, unsafe_allow_html=False)
+            # Looks like markdown - use container to control width
+            with st.container():
+                st.markdown(content_str, unsafe_allow_html=False)
         elif content_str.startswith('{') or content_str.startswith('['):
-            # Might be malformed JSON, show in code block
-            st.code(content_str, language='json')
+            # Might be malformed JSON, show in code block with width control
+            with st.container():
+                # Add CSS to control code block width
+                st.markdown("""
+                    <style>
+                    .stCodeBlock {
+                        max-width: 100%;
+                        overflow-x: auto;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+                st.code(content_str, language='json')
         else:
-            # Plain text with proper newline handling
-            st.text(content_str)
+            # Plain text with proper newline handling and width control
+            with st.container():
+                # For long text, wrap it properly
+                if len(content_str) > 1000:
+                    # Split long text into paragraphs for better display
+                    paragraphs = content_str.split('\n\n')
+                    for para in paragraphs:
+                        if para.strip():
+                            st.markdown(para.strip())
+                else:
+                    st.text(content_str)
