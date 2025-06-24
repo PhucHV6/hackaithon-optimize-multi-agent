@@ -25,7 +25,7 @@ class AWSAgentChatbot:
             config = Config(
                 region_name=region_name,
                 retries={
-                    'max_attempts': 3,
+                    'max_attempts': 10,
                     'mode': 'adaptive'
                 },
                 read_timeout=300,  # 5 minutes read timeout
@@ -211,14 +211,21 @@ class AWSAgentChatbot:
             st.error(f"Failed to query knowledge base: {str(e)}")
             return []
     
-    def invoke_agent(self, agent_id: str, agent_alias_id: str, user_input: str, session_id: str) -> str:
-        """Invoke the Bedrock agent"""
+    def invoke_agent(self, agent_id: str, agent_alias_id: str, user_input: str, session_id: str, conversation_history: List[Dict] = None) -> str:
+        """Invoke the Bedrock agent with conversation history"""
         try:
+            # Build conversation context
+            if conversation_history:
+                # Format conversation history for the agent
+                context = self._build_conversation_context(conversation_history, user_input)
+            else:
+                context = user_input
+                
             response = self.bedrock_agent_runtime_client.invoke_agent(
                 agentId=agent_id,
                 agentAliasId=agent_alias_id,
                 sessionId=session_id,
-                inputText=user_input
+                inputText=context
             )
             
             # Process the response stream
@@ -234,6 +241,51 @@ class AWSAgentChatbot:
         except ClientError as e:
             st.error(f"Failed to invoke agent: {str(e)}")
             return f"Sorry, I encountered an error: {str(e)}"
+    
+    def _build_conversation_context(self, conversation_history: List[Dict], current_input: str) -> str:
+        """Build conversation context from history"""
+        context_parts = []
+        
+        # Add recent conversation history (last 10 exchanges to avoid token limits)
+        recent_history = conversation_history[-10:]  # Last 10 messages
+        
+        for msg in recent_history:
+            # Skip system messages and context messages as they're internal
+            if msg.get("role") == "system" or msg.get("is_context", False):
+                continue
+                
+            if msg["role"] == "user":
+                context_parts.append(f"User: {msg['content']}")
+            elif msg["role"] == "assistant":
+                context_parts.append(f"Assistant: {msg['content']}")
+        
+        # Add current input
+        context_parts.append(f"User: {current_input}")
+        
+        # If we have context, add a separator for clarity
+        if len(context_parts) > 1:
+            return "\n\n".join(context_parts)
+        else:
+            return current_input
+    
+    def get_conversation_summary(self, conversation_history: List[Dict]) -> str:
+        """Get a summary of the conversation for context"""
+        if not conversation_history:
+            return "No previous conversation."
+        
+        # Count messages by type
+        user_messages = [msg for msg in conversation_history if msg.get("role") == "user" and not msg.get("is_context", False)]
+        assistant_messages = [msg for msg in conversation_history if msg.get("role") == "assistant"]
+        
+        summary = f"Conversation has {len(user_messages)} user messages and {len(assistant_messages)} assistant responses."
+        
+        # Add recent topics if available
+        if user_messages:
+            recent_topics = [msg['content'][:50] + "..." if len(msg['content']) > 50 else msg['content'] 
+                           for msg in user_messages[-3:]]  # Last 3 user messages
+            summary += f" Recent topics: {', '.join(recent_topics)}"
+        
+        return summary
     
     def list_s3_files(self, folder_prefix: str = "") -> List[Dict]:
         """List files in S3 bucket with optional folder filtering"""

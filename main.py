@@ -32,6 +32,15 @@ def init_session_state():
     # Session state keys for uploader reset
     if 'uploader_key' not in st.session_state:
         st.session_state.uploader_key = 0
+    
+    # Add conversation context tracking
+    if 'conversation_context' not in st.session_state:
+        st.session_state.conversation_context = {
+            'current_agent': None,
+            'session_start_time': datetime.now(),
+            'message_count': 0,
+            'last_agent_switch': None
+        }
 
 def setup_sidebar():
     """Setup sidebar for AWS configuration and navigation"""
@@ -160,9 +169,22 @@ def setup_sidebar():
             if st.button("New Session"):
                 st.session_state.session_id = str(uuid.uuid4())
                 st.session_state.messages = []
+                # Reset conversation context
+                st.session_state.conversation_context = {
+                    'current_agent': st.session_state.selected_agent['agentId'] if st.session_state.selected_agent else None,
+                    'session_start_time': datetime.now(),
+                    'message_count': 0,
+                    'last_agent_switch': None
+                }
                 st.success("New session started!")
             
             st.caption(f"Session ID: {st.session_state.session_id[:8]}...")
+            
+            # Display conversation context info
+            if st.session_state.conversation_context['message_count'] > 0:
+                st.caption(f"Messages in session: {st.session_state.conversation_context['message_count']}")
+                session_duration = datetime.now() - st.session_state.conversation_context['session_start_time']
+                st.caption(f"Session duration: {session_duration.seconds // 60}m {session_duration.seconds % 60}s")
     
     return st.session_state.is_logged_in
 
@@ -205,6 +227,10 @@ def display_agents_section():
         selected_agent = next(agent for agent in st.session_state.agents if agent['agentId'] == agent_id)
         previous_agent_name = st.session_state.selected_agent['agentName'] if st.session_state.selected_agent else None
         st.session_state.selected_agent = selected_agent
+        
+        # Update conversation context for agent switch
+        st.session_state.conversation_context['last_agent_switch'] = datetime.now()
+        st.session_state.conversation_context['current_agent'] = agent_id
         
         # Add context message about agent change
         if previous_agent_name and st.session_state.messages:
@@ -417,6 +443,27 @@ def display_chat_section():
         st.info("Please select an agent first from the Agents tab.")
         return
     
+    # Debug information (collapsible)
+    with st.expander("🔧 Debug: Conversation Context", expanded=False):
+        st.write("**Session Info:**")
+        st.write(f"- Session ID: {st.session_state.session_id}")
+        st.write(f"- Current Agent: {st.session_state.selected_agent['agentName']}")
+        st.write(f"- Agent ID: {st.session_state.selected_agent['agentId']}")
+        st.write(f"- Alias ID: {st.session_state.chat_alias_id}")
+        
+        st.write("**Conversation Context:**")
+        st.write(f"- Message Count: {st.session_state.conversation_context['message_count']}")
+        st.write(f"- Session Start: {st.session_state.conversation_context['session_start_time'].strftime('%H:%M:%S')}")
+        if st.session_state.conversation_context['last_agent_switch']:
+            st.write(f"- Last Agent Switch: {st.session_state.conversation_context['last_agent_switch'].strftime('%H:%M:%S')}")
+        
+        if st.session_state.messages:
+            st.write("**Recent Messages:**")
+            for i, msg in enumerate(st.session_state.messages[-5:]):  # Show last 5 messages
+                role_icon = "👤" if msg["role"] == "user" else "🤖" if msg["role"] == "assistant" else "⚙️"
+                content_preview = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
+                st.write(f"{role_icon} {msg['role']}: {content_preview}")
+    
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -426,18 +473,18 @@ def display_chat_section():
     # Generate initial response (if it's the first message)
     if not st.session_state.messages:
         with st.chat_message("assistant"):
-            # response = st.session_state.chatbot.invoke_agent(
-            #     "Hello", 
-            #     st.session_state.session_id
-            # )
             response = st.session_state.chatbot.invoke_agent(
                 agent_id=st.session_state.selected_agent['agentId'],
                 agent_alias_id=st.session_state.chat_alias_id,
                 user_input='Hello',
-                session_id=st.session_state.session_id
+                session_id=st.session_state.session_id,
+                conversation_history=st.session_state.messages
             )
             display_content_with_formatting(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+        # Update conversation context
+        st.session_state.conversation_context['message_count'] += 1
+        st.session_state.conversation_context['current_agent'] = st.session_state.selected_agent['agentId']
     
     # Chat input
     if prompt := st.chat_input("Ask me anything about your uploaded documents..."):
@@ -450,18 +497,21 @@ def display_chat_section():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Invoke the agent
+                    # Invoke the agent with conversation history
                     response = st.session_state.chatbot.invoke_agent(
                         agent_id=st.session_state.selected_agent['agentId'],
                         agent_alias_id=st.session_state.chat_alias_id,
                         user_input=prompt,
-                        session_id=st.session_state.session_id
+                        session_id=st.session_state.session_id,
+                        conversation_history=st.session_state.messages
                     )
                     
                     if response:
                         # st.markdown(response)
                         display_content_with_formatting(response)
                         st.session_state.messages.append({"role": "assistant", "content": response})
+                        # Update conversation context
+                        st.session_state.conversation_context['message_count'] += 1
                     else:
                         st.error("No response received from agent")
                         
