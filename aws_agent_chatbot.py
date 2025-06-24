@@ -32,10 +32,34 @@ class AWSAgentChatbot:
                 connect_timeout=60,  # 1 minute connect timeout
                 max_pool_connections=50
             )
-            # Initialize AWS clients
-            self.s3_client = boto3.client('s3')
-            self.bedrock_agent_client = boto3.client('bedrock-agent', config=config)
-            self.bedrock_agent_runtime_client = boto3.client('bedrock-agent-runtime', config=config)
+            
+            # Initialize AWS clients with proper credential handling
+            if aws_access_key_id and aws_secret_access_key:
+                # Use provided credentials
+                self.s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    region_name=region_name
+                )
+                self.bedrock_agent_client = boto3.client(
+                    'bedrock-agent',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    config=config
+                )
+                self.bedrock_agent_runtime_client = boto3.client(
+                    'bedrock-agent-runtime',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    config=config
+                )
+            else:
+                # Use default credentials (environment variables, IAM roles, etc.)
+                self.s3_client = boto3.client('s3', region_name=region_name)
+                self.bedrock_agent_client = boto3.client('bedrock-agent', config=config)
+                self.bedrock_agent_runtime_client = boto3.client('bedrock-agent-runtime', config=config)
+            
             self.region_name = region_name
             
         except Exception as e:
@@ -57,6 +81,32 @@ class AWSAgentChatbot:
                 
         except Exception as e:
             st.error(f"Configuration error: {str(e)}")
+    
+    def test_credentials(self) -> Dict[str, Any]:
+        """Test AWS credentials and return connection status"""
+        try:
+            # Test basic AWS access by calling STS
+            sts_client = boto3.client('sts')
+            identity = sts_client.get_caller_identity()
+            
+            # Test Bedrock Agent access
+            agents = self.list_agents()
+            
+            return {
+                'status': 'success',
+                'user_arn': identity.get('Arn', 'Unknown'),
+                'account_id': identity.get('Account', 'Unknown'),
+                'user_id': identity.get('UserId', 'Unknown'),
+                'agent_count': len(agents) if agents else 0,
+                'region': self.region_name
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'region': self.region_name
+            }
     
     def list_agents(self) -> List[Dict[str, Any]]:
         """List all available agents"""

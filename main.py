@@ -76,11 +76,29 @@ def setup_sidebar():
         aws_secret_key = None
         
         if cred_method == "Enter Credentials Manually":
-            aws_access_key = st.sidebar.text_input("AWS Access Key ID", type="password")
-            aws_secret_key = st.sidebar.text_input("AWS Secret Access Key", type="password")
+            aws_access_key = st.sidebar.text_input("AWS Access Key ID", type="password", help="Enter your AWS Access Key ID")
+            aws_secret_key = st.sidebar.text_input("AWS Secret Access Key", type="password", help="Enter your AWS Secret Access Key")
+            
+            # Validate credential format
+            if aws_access_key and not aws_access_key.startswith('AKIA'):
+                st.sidebar.warning("⚠️ Access Key ID should start with 'AKIA'")
+            if aws_secret_key and len(aws_secret_key) != 40:
+                st.sidebar.warning("⚠️ Secret Access Key should be 40 characters long")
         
         # Connect button
         if st.sidebar.button("🔌 Connect to AWS"):
+            # Validate credentials if manual method is selected
+            if cred_method == "Enter Credentials Manually":
+                if not aws_access_key or not aws_secret_key:
+                    st.sidebar.error("❌ Please provide both Access Key ID and Secret Access Key")
+                    return
+                if not aws_access_key.startswith('AKIA'):
+                    st.sidebar.error("❌ Invalid Access Key ID format")
+                    return
+                if len(aws_secret_key) != 40:
+                    st.sidebar.error("❌ Invalid Secret Access Key format")
+                    return
+            
             try:
                 with st.spinner("Connecting to AWS Bedrock Agents..."):
                     client = AWSAgentChatbot(
@@ -89,12 +107,32 @@ def setup_sidebar():
                         aws_secret_access_key=aws_secret_key
                     )
                     
+                    # Test the connection and credentials
+                    test_result = client.test_credentials()
+                    
+                    if test_result['status'] == 'error':
+                        st.sidebar.error(f"❌ Connection test failed: {test_result['error']}")
+                        return
+                    
                     # Test the connection by listing agents
                     agents = client.list_agents()
+                    
+                    if not agents:
+                        st.sidebar.warning("⚠️ No agents found. Please ensure you have agents created in AWS Bedrock.")
                     
                     st.session_state.chatbot = client
                     st.session_state.agents = agents
                     st.session_state.is_logged_in = True
+                    
+                    # Store connection info (without credentials)
+                    st.session_state.connection_info = {
+                        'region': region,
+                        'credential_method': cred_method,
+                        'connected_at': datetime.now(),
+                        'agent_count': len(agents) if agents else 0,
+                        'user_arn': test_result.get('user_arn', 'Unknown'),
+                        'account_id': test_result.get('account_id', 'Unknown')
+                    }
 
                     # Only set initial agent and alias if none selected
                     if not st.session_state.selected_agent and agents:
@@ -116,17 +154,55 @@ def setup_sidebar():
                 st.sidebar.error(f"❌ Connection failed: {error_msg}")
                 
                 # Provide helpful debugging information
-                if "credentials" in error_msg.lower():
+                if "credentials" in error_msg.lower() or "invalid" in error_msg.lower():
                     st.sidebar.info("💡 Tip: Check your AWS credentials and permissions")
                 elif "region" in error_msg.lower():
                     st.sidebar.info("💡 Tip: Verify the selected region supports Bedrock Agents")
                 elif "access denied" in error_msg.lower():
                     st.sidebar.info("💡 Tip: Ensure your IAM user/role has Bedrock permissions")
+                elif "timeout" in error_msg.lower():
+                    st.sidebar.info("💡 Tip: Check your internet connection and try again")
+                elif "not found" in error_msg.lower():
+                    st.sidebar.info("💡 Tip: Verify the region and service availability")
+                else:
+                    st.sidebar.info("💡 Tip: Check your AWS configuration and permissions")
     else:
         # Sidebar for configuration and file management
         with st.sidebar:
             # Show current connection info
             st.success(f"✅ Connected to {st.session_state.chatbot.region_name}")
+            
+            # Display connection details
+            if 'connection_info' in st.session_state:
+                with st.expander("🔗 Connection Details", expanded=False):
+                    st.write(f"**Region:** {st.session_state.connection_info['region']}")
+                    st.write(f"**Method:** {st.session_state.connection_info['credential_method']}")
+                    st.write(f"**Connected:** {st.session_state.connection_info['connected_at'].strftime('%H:%M:%S')}")
+                    st.write(f"**Agents Found:** {st.session_state.connection_info['agent_count']}")
+                    st.write(f"**Account ID:** {st.session_state.connection_info['account_id']}")
+                    st.write(f"**User ARN:** {st.session_state.connection_info['user_arn']}")
+            
+            # Disconnect button
+            if st.button("🔌 Disconnect"):
+                # Clear session state
+                st.session_state.is_logged_in = False
+                st.session_state.chatbot = None
+                st.session_state.agents = []
+                st.session_state.selected_agent = None
+                st.session_state.messages = []
+                st.session_state.session_id = str(uuid.uuid4())
+                st.session_state.conversation_context = {
+                    'current_agent': None,
+                    'session_start_time': datetime.now(),
+                    'message_count': 0,
+                    'last_agent_switch': None
+                }
+                if 'connection_info' in st.session_state:
+                    del st.session_state.connection_info
+                st.success("Disconnected successfully!")
+                st.rerun()
+            
+            st.divider()
             
             # Navigation menu
             st.title("🧭 Navigation")
