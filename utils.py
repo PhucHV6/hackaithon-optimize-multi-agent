@@ -76,6 +76,68 @@ def sanitize_filename(filename: str) -> str:
     
     return filename
 
+# def display_content_with_formatting(content_str: str):
+#     """Display content with intelligent formatting"""
+#     if not content_str or content_str.strip() == "":
+#         st.info("No content returned")
+#         return
+    
+#     # Pre-process the content string
+#     # Replace \n with actual newlines
+#     content_str = content_str.replace('\\n', '\n')
+#     # Replace \t with actual tabs
+#     content_str = content_str.replace('\\t', '\t')
+#     # Handle other special characters
+#     content_str = content_str.replace('\\r', '\r')
+    
+#     # Try to parse as JSON first
+#     try:
+#         content_json = json.loads(content_str)
+#         if isinstance(content_json, (dict, list)):
+#             # Use container to control JSON display width
+#             with st.container():
+#                 st.json(content_json)
+#         else:
+#             st.markdown(str(content_json))
+#     except (json.JSONDecodeError, TypeError):
+#         # If not JSON, check if it looks like structured text
+#         if any(marker in content_str for marker in ['#', '##', '###', '*', '-', '1.', '\n-', '\n1.']):
+#             # Clean up markdown formatting
+#             # Fix numbered lists that might have escaped newlines
+#             content_str = re.sub(r'\\n(\d+\.)', r'\n\1', content_str)
+#             # Fix bullet points that might have escaped newlines
+#             content_str = re.sub(r'\\n-', r'\n-', content_str)
+#             # Ensure proper spacing for headers
+#             content_str = re.sub(r'\\n(#+)', r'\n\1 ', content_str)
+#             # Looks like markdown - use container to control width
+#             with st.container():
+#                 st.markdown(content_str, unsafe_allow_html=False)
+#         elif content_str.startswith('{') or content_str.startswith('['):
+#             # Might be malformed JSON, show in code block with width control
+#             with st.container():
+#                 # Add CSS to control code block width
+#                 st.markdown("""
+#                     <style>
+#                     .stCodeBlock {
+#                         max-width: 100%;
+#                         overflow-x: auto;
+#                     }
+#                     </style>
+#                 """, unsafe_allow_html=True)
+#                 st.code(content_str, language='json')
+#         else:
+#             # Plain text with proper newline handling and width control
+#             with st.container():
+#                 # For long text, wrap it properly
+#                 if len(content_str) > 1000:
+#                     # Split long text into paragraphs for better display
+#                     paragraphs = content_str.split('\n\n')
+#                     for para in paragraphs:
+#                         if para.strip():
+#                             st.markdown(para.strip())
+#                 else:
+#                     st.text(content_str)
+
 def display_content_with_formatting(content_str: str):
     """Display content with intelligent formatting"""
     if not content_str or content_str.strip() == "":
@@ -89,51 +151,32 @@ def display_content_with_formatting(content_str: str):
     content_str = content_str.replace('\\t', '\t')
     # Handle other special characters
     content_str = content_str.replace('\\r', '\r')
+
+    st.markdown(content_str)
     
     # Try to parse as JSON first
-    try:
-        content_json = json.loads(content_str)
-        if isinstance(content_json, (dict, list)):
-            # Use container to control JSON display width
-            with st.container():
-                st.json(content_json)
-        else:
-            st.markdown(str(content_json))
-    except (json.JSONDecodeError, TypeError):
-        # If not JSON, check if it looks like structured text
-        if any(marker in content_str for marker in ['#', '##', '###', '*', '-', '1.', '\n-', '\n1.']):
-            # Clean up markdown formatting
-            # Fix numbered lists that might have escaped newlines
-            content_str = re.sub(r'\\n(\d+\.)', r'\n\1', content_str)
-            # Fix bullet points that might have escaped newlines
-            content_str = re.sub(r'\\n-', r'\n-', content_str)
-            # Ensure proper spacing for headers
-            content_str = re.sub(r'\\n(#+)', r'\n\1 ', content_str)
-            # Looks like markdown - use container to control width
-            with st.container():
-                st.markdown(content_str, unsafe_allow_html=False)
-        elif content_str.startswith('{') or content_str.startswith('['):
-            # Might be malformed JSON, show in code block with width control
-            with st.container():
-                # Add CSS to control code block width
-                st.markdown("""
-                    <style>
-                    .stCodeBlock {
-                        max-width: 100%;
-                        overflow-x: auto;
-                    }
-                    </style>
-                """, unsafe_allow_html=True)
-                st.code(content_str, language='json')
-        else:
-            # Plain text with proper newline handling and width control
-            with st.container():
-                # For long text, wrap it properly
-                if len(content_str) > 1000:
-                    # Split long text into paragraphs for better display
-                    paragraphs = content_str.split('\n\n')
-                    for para in paragraphs:
-                        if para.strip():
-                            st.markdown(para.strip())
-                else:
-                    st.text(content_str)
+    # try:
+    #     content_json = json.loads(content_str)
+    #     if isinstance(content_json, (dict, list)):
+    #         st.json(content_json)
+    #     else:
+    #         # st.markdown(f"""<span style="word-wrap:break-word;">{str(content_json)}</span>""", unsafe_allow_html=True)
+    #         st.markdown(str(content_json))
+    # except (json.JSONDecodeError, TypeError):
+    #     # If not JSON, check if it looks like structured text
+    #     if any(marker in content_str for marker in ['#', '##', '###', '*', '-', '1.', '\n-', '\n1.']):
+    #         # Clean up markdown formatting
+    #         # Fix numbered lists that might have escaped newlines
+    #         content_str = re.sub(r'\\n(\d+\.)', r'\n\1', content_str)
+    #         # Fix bullet points that might have escaped newlines
+    #         content_str = re.sub(r'\\n-', r'\n-', content_str)
+    #         # Ensure proper spacing for headers
+    #         content_str = re.sub(r'\\n(#+)', r'\n\1 ', content_str)
+    #         # Looks like markdown
+    #         st.markdown(content_str, unsafe_allow_html=False)
+    #     elif content_str.startswith('{') or content_str.startswith('['):
+    #         # Might be malformed JSON, show in code block
+    #         st.code(content_str, language='json')
+        # else:
+        #     # Plain text with proper newline handling
+        #     st.text(content_str)
