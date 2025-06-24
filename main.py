@@ -112,6 +112,19 @@ def setup_sidebar():
                     
                     if test_result['status'] == 'error':
                         st.sidebar.error(f"❌ Connection test failed: {test_result['error']}")
+                        
+                        # Show debug information for troubleshooting
+                        with st.sidebar.expander("🔧 Debug Information", expanded=False):
+                            debug_info = client.debug_connection()
+                            st.write("**Connection Debug Info:**")
+                            st.write(f"- Region: {debug_info['region']}")
+                            st.write(f"- Credential Method: {test_result['credential_method']}")
+                            st.write(f"- Has Access Key: {debug_info['has_access_key']}")
+                            st.write(f"- Has Secret Key: {debug_info['has_secret_key']}")
+                            st.write(f"- Access Key Prefix: {debug_info['access_key_prefix']}")
+                            st.write(f"- S3 Test: {debug_info['s3_test']}")
+                            st.write(f"- Bedrock Test: {debug_info['bedrock_test']}")
+                        
                         return
                     
                     # Test the connection by listing agents

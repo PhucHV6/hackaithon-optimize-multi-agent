@@ -33,6 +33,10 @@ class AWSAgentChatbot:
                 max_pool_connections=50
             )
             
+            # Store credentials for later use
+            self.aws_access_key_id = aws_access_key_id
+            self.aws_secret_access_key = aws_secret_access_key
+            
             # Initialize AWS clients with proper credential handling
             if aws_access_key_id and aws_secret_access_key:
                 # Use provided credentials
@@ -85,8 +89,19 @@ class AWSAgentChatbot:
     def test_credentials(self) -> Dict[str, Any]:
         """Test AWS credentials and return connection status"""
         try:
-            # Test basic AWS access by calling STS
-            sts_client = boto3.client('sts')
+            # Test basic AWS access by calling STS with the same credentials
+            if self.aws_access_key_id and self.aws_secret_access_key:
+                # Use the same credentials as other clients
+                sts_client = boto3.client(
+                    'sts',
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                    region_name=self.region_name
+                )
+            else:
+                # Use default credentials
+                sts_client = boto3.client('sts', region_name=self.region_name)
+            
             identity = sts_client.get_caller_identity()
             
             # Test Bedrock Agent access
@@ -98,14 +113,27 @@ class AWSAgentChatbot:
                 'account_id': identity.get('Account', 'Unknown'),
                 'user_id': identity.get('UserId', 'Unknown'),
                 'agent_count': len(agents) if agents else 0,
-                'region': self.region_name
+                'region': self.region_name,
+                'credential_method': 'manual' if self.aws_access_key_id else 'default'
             }
             
         except Exception as e:
+            error_msg = str(e)
+            # Provide more specific error information
+            if "InvalidClientTokenId" in error_msg:
+                error_msg = "Invalid Access Key ID - Please check your credentials"
+            elif "SignatureDoesNotMatch" in error_msg:
+                error_msg = "Invalid Secret Access Key - Please check your credentials"
+            elif "AccessDenied" in error_msg:
+                error_msg = "Access Denied - Please check your IAM permissions"
+            elif "ExpiredTokenException" in error_msg:
+                error_msg = "Credentials have expired - Please refresh your credentials"
+            
             return {
                 'status': 'error',
-                'error': str(e),
-                'region': self.region_name
+                'error': error_msg,
+                'region': self.region_name,
+                'credential_method': 'manual' if self.aws_access_key_id else 'default'
             }
     
     def list_agents(self) -> List[Dict[str, Any]]:
@@ -370,3 +398,40 @@ class AWSAgentChatbot:
             return True
         except ClientError as e:
             return False
+
+    def debug_connection(self) -> Dict[str, Any]:
+        """Debug connection and credential information"""
+        debug_info = {
+            'region': self.region_name,
+            'has_access_key': bool(self.aws_access_key_id),
+            'has_secret_key': bool(self.aws_secret_access_key),
+            'access_key_prefix': self.aws_access_key_id[:4] + '...' if self.aws_access_key_id else 'None',
+            'clients_initialized': {
+                's3_client': hasattr(self, 's3_client'),
+                'bedrock_agent_client': hasattr(self, 'bedrock_agent_client'),
+                'bedrock_agent_runtime_client': hasattr(self, 'bedrock_agent_runtime_client')
+            }
+        }
+        
+        # Test each service individually
+        try:
+            if hasattr(self, 's3_client'):
+                # Test S3 access
+                self.s3_client.list_buckets()
+                debug_info['s3_test'] = 'success'
+            else:
+                debug_info['s3_test'] = 'client_not_initialized'
+        except Exception as e:
+            debug_info['s3_test'] = f'error: {str(e)}'
+        
+        try:
+            if hasattr(self, 'bedrock_agent_client'):
+                # Test Bedrock Agent access
+                self.bedrock_agent_client.list_agents()
+                debug_info['bedrock_test'] = 'success'
+            else:
+                debug_info['bedrock_test'] = 'client_not_initialized'
+        except Exception as e:
+            debug_info['bedrock_test'] = f'error: {str(e)}'
+        
+        return debug_info
