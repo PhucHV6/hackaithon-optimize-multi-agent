@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  aws-agent-chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aws-agent-chatbot
+    ports:
+      - "8501:8501"
+    environment:
+      # AWS Configuration
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      
+      # Application Configuration
+      - S3_BUCKET=${S3_BUCKET}
+      - KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID}
+      - AGENT_ID=${AGENT_ID}
+      - AGENT_ALIAS_ID=${AGENT_ALIAS_ID}
+      
+      # Optional: Advanced Settings
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-52428800}
+      - SUPPORTED_FORMATS=${SUPPORTED_FORMATS:-pdf,txt,docx,csv,json,md}
+      
+      # Streamlit Configuration
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
+      - STREAMLIT_SERVER_ENABLE_STATIC_SERVING=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    volumes:
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+      # Mount .streamlit directory for configuration
+      - ./.streamlit:/app/.streamlit:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chatbot-network
+
+  # Optional: Redis for caching (uncomment if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: chatbot-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - chatbot-network
+
+networks:
+  chatbot-network:
+    driver: bridge
+
+# Optional: Redis volume (uncomment if using Redis)
+# volumes:
+#   redis_data: 
