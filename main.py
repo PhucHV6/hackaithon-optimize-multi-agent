@@ -2,13 +2,13 @@ import uuid
 import streamlit as st
 from datetime import datetime
 from typing import List, Dict, Any
-from aws_agent_chatbot import AWSAgentChatbot
-from utils import display_content_with_formatting, format_file_size
-# import logging
+from src.aws_agent_chatbot import AWSAgentChatbot
+from src.utilities.utils import display_content_with_formatting, format_file_size
+import logging
 
-# # Configure logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def init_session_state():
     """Initialize Streamlit session state"""

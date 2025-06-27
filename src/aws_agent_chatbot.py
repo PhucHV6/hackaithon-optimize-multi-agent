@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from botocore.exceptions import ClientError
 import mimetypes
 import os
-from utils import sanitize_filename
+from src.utilities.utils import sanitize_filename
 
 
 class AWSAgentChatbot:
