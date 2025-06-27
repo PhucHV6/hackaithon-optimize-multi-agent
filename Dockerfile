@@ -57,7 +57,6 @@ WORKDIR /app
 COPY main.py .
 COPY requirements.txt .
 COPY src/ ./src/
-COPY prompts/ ./prompts/
 
 # Create necessary directories
 RUN mkdir -p .streamlit && \
