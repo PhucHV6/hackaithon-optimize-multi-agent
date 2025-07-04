@@ -1,10 +1,23 @@
 import json
 import logging
 from aws_agent import AWSAgent
+import mimetypes
 
 # Set up logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+def get_content_type(file_name):
+    # Try to guess the content type based on the file extension
+    content_type, _ = mimetypes.guess_type(file_name)
+    # Fallbacks for common types
+    if file_name.endswith('.md'):
+        return 'text/markdown'
+    if file_name.endswith('.json'):
+        return 'application/json'
+    if file_name.endswith('.xml'):
+        return 'application/xml'
+    return content_type or 'application/octet-stream'
 
 def lambda_handler(event, context):
     logger.info("Lambda invoked with event: %s", json.dumps(event))
@@ -33,14 +46,23 @@ def lambda_handler(event, context):
         knowledge_base_id=knowledge_base_id
     )
 
-    if file_name == "application_inventory.json":
-        response_body = client.save_application_inventory(content)
-    else:
-        # Save portfolio to s3
-        response_body = client.save_portfolio(content)
+    content_type = get_content_type(file_name)
+
+    # Use unified save_file method
+    upload_response = client.save_file(content, content_type, file_name)
 
     # Sync data source in knowledge base
-    response_body = client.sync_knowledge_base()
+    sync_response = client.sync_knowledge_base()
+    
+    # Combine responses
+    response_body = {
+        'TEXT': {
+            'body': json.dumps({
+                "upload_result": json.loads(upload_response['TEXT']['body']),
+                "sync_result": json.loads(sync_response['TEXT']['body'])
+            })
+        }
+    }
 
     action_response = {
         'actionGroup': action_group,

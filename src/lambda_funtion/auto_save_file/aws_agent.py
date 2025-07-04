@@ -43,27 +43,64 @@ class AWSAgent:
             logger.error(f"Failed to initialize AWS clients: {str(e)}")
             return {"statusCode": 500, "body": f"Setup failed: {str(e)}"}
 
-    def save_portfolio(self, content: str):
-        """Save complete portfolio to S3 bucket in specified folder"""
+    def save_file(self, content: str, content_type: str, file_name: str = None):
+        """Save file to S3 bucket in specified folder"""
         try:
-            key = f"save_data/{self.timestamp}_portfolio.md"
-            body = content
-            content_type = "text/markdown"
+            # Use the actual file name with timestamp prefix
+            if file_name:
+                # Extract file extension for proper handling
+                if file_name.endswith('.json'):
+                    # Parse JSON content for proper formatting
+                    body = json.loads(content)
+                    body_content = json.dumps(body, indent=2)
+                else:
+                    # Use content as-is for other file types
+                    body_content = content
+                
+                # Create key using actual file name with timestamp
+                key = f"save_data/{self.timestamp}_{file_name}"
+            else:
+                # Fallback for backward compatibility
+                key = f"save_data/{self.timestamp}_file"
+                body_content = content
 
-            logger.info(f"Uploading file to S3 bucket '{self.bucket_name}' with key '{key}'")
+            logger.info(f"Uploading file to S3 bucket '{self.bucket_name}' with key '{key}' and content_type '{content_type}'")
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=key,
-                Body=body.encode("utf-8"),
+                Body=body_content.encode("utf-8"),
                 ContentType=content_type
             )
             logger.info("✅ Upload successful.")
 
+            # Generate presigned URL for download (expires in 5 hours)
+            try:
+                download_url = self.s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': self.bucket_name, 'Key': key},
+                    ExpiresIn=18000  # 5 hours in seconds
+                )
+                logger.info(f"Generated presigned URL: {download_url[:100]}...")
+            except Exception as e:
+                logger.error(f"Failed to generate presigned URL: {str(e)}")
+                download_url = None
+
             response_body = {
                 'TEXT': {
                     'body': json.dumps({
-                        "message": "File uploaded successfully.",
-                        "s3_key": key
+                        "status": "success",
+                        "message": f"✅ File '{file_name or key.split('/')[-1]}' uploaded successfully!",
+                        "file_details": {
+                            "name": file_name or key.split('/')[-1],
+                            "size_bytes": len(body_content.encode("utf-8")),
+                            "type": content_type,
+                            "location": f"S3: {self.bucket_name}/{key}"
+                        },
+                        "download_info": {
+                            "url": download_url,
+                            "instructions": f"Copy and paste this URL in your browser to download: {download_url}" if download_url else f"File saved to S3 bucket '{self.bucket_name}' with key '{key}'. Access via AWS Console or CLI.",
+                            "aws_cli_command": f"aws s3 cp s3://{self.bucket_name}/{key} ./{key.split('/')[-1]}"
+                        }
                     })
                 }
             }
@@ -72,38 +109,17 @@ class AWSAgent:
         
         except Exception as e:
             logger.error("Error uploading to S3: %s", str(e), exc_info=True)
-            return {"statusCode": 500, "body": f"Upload failed: {str(e)}"}
-
-    def save_application_inventory(self, content: str):
-        """Save complete portfolio to S3 bucket in specified folder"""
-        try:
-            key = f"save_data/{self.timestamp}_application_inventory.json"
-            body = json.loads(content)
-            content_type = "application/json"
-
-            logger.info(f"Uploading file to S3 bucket '{self.bucket_name}' with key '{key}'")
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=key,
-                Body=json.dumps(body, indent=2),
-                ContentType=content_type
-            )
-            logger.info("✅ Upload successful.")
-
             response_body = {
                 'TEXT': {
                     'body': json.dumps({
-                        "message": "File uploaded successfully.",
-                        "s3_key": key
+                        "status": "error",
+                        "message": f"Upload failed: {str(e)}",
+                        "file_details": None,
+                        "download_info": None
                     })
                 }
             }
-
             return response_body
-        
-        except Exception as e:
-            logger.error("Error uploading to S3: %s", str(e), exc_info=True)
-            return {"statusCode": 500, "body": f"Upload failed: {str(e)}"}
 
     def sync_knowledge_base(self):
         """Trigger knowledge base synchronization"""
@@ -120,6 +136,7 @@ class AWSAgent:
             response_body = {
                 'TEXT': {
                     'body': json.dumps({
+                        "status": "success",
                         "message": "File synced successfully.",
                         "ingestion_Job_Id": job_id
                     })
