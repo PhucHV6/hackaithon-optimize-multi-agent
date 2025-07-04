@@ -580,7 +580,7 @@ def display_chat_section():
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.text(prompt)
         
         # Generate assistant response
         with st.chat_message("assistant"):
